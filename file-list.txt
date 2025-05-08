@@ -1,0 +1,9 @@
+messages /home/joey/Documents/projects/discord/bot2/channels/the-miku-channel.txt
+messages /home/joey/Documents/projects/discord/bot2/channels/gremlint-lair.txt
+ignore /home/joey/Documents/books/335150171-The-Hows-and-Whys-of-Level-Design.txt
+ignore /home/joey/Documents/books/cgol-an-algebraic-notation-for-maclisp-users.txt
+ignore /mnt/c/Users/joey/Documents/bible/nasb_raw.txt
+ignore /home/joey/Documents/books/five-little-peppers-and-how-they-grew.txt
+ignore /home/joey/Documents/books/five-little-peppers-midway.txt
+ignore /home/joey/Documents/projects/markov-chain/c9x-draft.txt
+ignore /home/joey/Documents/projects/discord/bot2/bug-speak.txt
