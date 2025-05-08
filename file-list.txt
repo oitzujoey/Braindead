@@ -1,3 +1,4 @@
+uninteresting-words /home/joey/Documents/projects/markov-chain/uninteresting_words.txt
 messages /home/joey/Documents/projects/discord/bot2/channels/the-miku-channel.txt
 messages /home/joey/Documents/projects/discord/bot2/channels/gremlint-lair.txt
 ignore /home/joey/Documents/books/335150171-The-Hows-and-Whys-of-Level-Design.txt

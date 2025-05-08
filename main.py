@@ -8,6 +8,7 @@ import random
 
 window = 2
 
+uninteresting_words = set()
 message_sets = []
 file_names = []
 with open(sys.argv[1], 'r') as file_list_file:
@@ -16,17 +17,21 @@ with open(sys.argv[1], 'r') as file_list_file:
         mode = line[0]
         path = line[1]
         if mode == 'ignore': continue
-        file_names += [path]
+        if mode != 'uninteresting-words':
+            file_names += [path]
         messages = []
         with open(path.strip(), 'r') as text_file:
             if mode == 'messages':
                 messages += list(text_file)
             elif mode == 'book':
                 messages += [message + '.' for message in ' '.join(text_file).split('.')]
+            elif mode == 'uninteresting-words':
+                uninteresting_words |= set(map(lambda line: line.strip(), text_file))
             else:
                 raise Exception(f"Invalid text file type \"{mode}\"")
         messages = [nltk.word_tokenize(line.strip()) for line in messages]
-        message_sets += [messages]
+        if messages:
+            message_sets += [messages]
 # message_set_lengths = []
 # for message_set in message_sets:
 #     message_set_lengths += [len(message_set)]
@@ -55,16 +60,15 @@ def rest(list):
 
 
 nodes = {}
+inverse_nodes = {}
 starts = []
 vocabulary = {}
 
 if '' in nodes:
     del nodes['']
 
-def train(message):
-    global starts
+def train(message, nodes):
     tokens = message[:]
-    starts += [first(tokens)]
     tokens = ['']*(window - 1) + tokens
     for token in tokens:
         if token in vocabulary:
@@ -85,7 +89,9 @@ def train(message):
         tokens = rest(tokens)
 
 for message in messages:
-    train(message)
+    starts += [first(message)]
+    train(message, nodes)
+    train(list(reversed(message)), inverse_nodes)
 
 print(len(vocabulary))
 
@@ -113,59 +119,82 @@ print(len(vocabulary))
 #                      for word, frequency in interesting_words.items()
 #                      if frequency <= 0.0019*max_interesting_word_length}
 
+def groom_choices(choices):
+    new_choices = set()
+    for choice in choices:
+        new_choice = ''.join(character for character in choice if character.isalpha() and character.isascii())
+        new_choices |= {new_choice.lower()}
+    new_choices -= uninteresting_words
+    # print(new_choices)
+    return new_choices
+interesting_words = groom_choices(vocabulary)
 
 def do_bot(text_in):
-    prompt = set(text_in.split(' '))
-    # interesting_words_in_prompt = {word for word in prompt if word in interesting_words}
-    # print(f'interesting_words_in_prompt {interesting_words_in_prompt}')
-    def groom_choices(choices):
-        new_choices = set()
-        for choice in choices:
-            new_choice = ''.join(character for character in choice if character.isalpha() and character.isascii())
-            new_choices |= {new_choice.lower()}
-        # print(new_choices)
-        return new_choices
-    choices = starts
-    chain = []
-    iterations = 0
-    max_iterations = random.randint(50, 100)
-    while choices:
-        if iterations >= max_iterations:
-            break
-        # print(prompt)
-        limited_selection = list(prompt & groom_choices(choices))
-        # print(limited_selection)
-        if limited_selection:
-            choice = random.choice(limited_selection)
-        else:
+    prompt = text_in.lower()
+    prompt = ''.join(character for character in prompt if character.isalpha() or character == ' ')
+    prompt = {word for word in prompt.split(' ') if word != ''}
+
+    seed_word_list = list(prompt & interesting_words)
+    if seed_word_list:
+        seed_word = random.choice(seed_word_list)
+        print(f'Chose "{seed_word}"')
+        matching_keys = list(filter(lambda key: seed_word in key.split(' '), nodes.keys()))
+    else:
+        matching_keys = []
+
+    def make_chain(nodes, initial_chain, starts):
+        choices = starts
+        chain = initial_chain
+        iterations = 0
+        max_iterations = random.randint(50, 100)
+        while choices:
+            if iterations >= max_iterations:
+                break
             choice = random.choice(choices)
-        if choice is None or choice == '':
-            break
-        local_window = window
-        if len(chain) < window - 1:
-            local_window = len(chain) + 1
-        key = choice
-        for i in range(local_window - 1):
-            key = chain[-1-i] + ' ' + key
-            # key = ' '.join(chain[-(window - 1):]) + ' ' + choice
-        chain += [choice]
-        choices = nodes[key.lower()]
-        iterations += 1
-    text_out = TreebankWordDetokenizer().detokenize(chain)
+            if choice is None or choice == '':
+                break
+            local_window = window
+            if len(chain) < window - 1:
+                local_window = len(chain) + 1
+            key = choice
+            for i in range(local_window - 1):
+                key = chain[-1-i] + ' ' + key
+                # key = ' '.join(chain[-(window - 1):]) + ' ' + choice
+            chain += [choice]
+            choices = nodes[key.lower()]
+            iterations += 1
+        return chain
+    if matching_keys:
+        seed_key = random.choice(matching_keys).split(' ')
+        if len(seed_key) == 1:
+            reverse_choices = [seed_key[0]]
+            reverse_chain = []
+            forward_choices = [seed_key[0]]
+            forward_chain = []
+        else:
+            reverse_choices = [seed_key[0]]
+            reverse_chain = [seed_key[1]]
+            forward_choices = [seed_key[1]]
+            forward_chain = [seed_key[0]]
+        # print(seed_key)
+        reversed_chain = list(reversed(make_chain(inverse_nodes, reverse_chain, reverse_choices)))
+        chain = make_chain(nodes, forward_chain, forward_choices)
+        # print(reversed_chain)
+        # print(chain)
+        tokens_out = reversed_chain + chain[2:]
+    else:
+        tokens_out = make_chain(nodes, [], starts)
+    text_out = TreebankWordDetokenizer().detokenize(tokens_out)
     print(text_out)
+    # print()
     return text_out.replace('\\n', '\n').strip()
 
 
-prompt = ' '.join(sys.argv[2:]).lower()
-prompt = ''.join(character for character in prompt if character.isalpha() or character == ' ')
-prompt = [word for word in prompt.split(' ') if word != '']
-print(f'prompt: {prompt}')
-print(f'Recognized words {[word for word in prompt if word in vocabulary.keys()]}')
+prompt = ' '.join(sys.argv[2:])
 
 print('READY')
 print(len(nodes))
-
 for i in range(100):
-    do_bot(' '.join(prompt))
-train(prompt)
+    do_bot(prompt)
+# train(prompt)
 ## Now put the prompt in the data file for this channel.
