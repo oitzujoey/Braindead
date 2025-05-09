@@ -96,7 +96,7 @@ def train(message, nodes):
 
 for message in messages:
     for bad_training_phrase in bad_training_phrases:
-        if bad_training_phrase in message:
+        if bad_training_phrase in ' '.join(message):
             break
     else:
         starts += [first(message)]
