@@ -143,6 +143,7 @@ def do_bot(text_in):
     prompt = text_in.lower()
     prompt = ''.join(character for character in prompt if character.isalpha() or character == ' ')
     prompt = {word for word in prompt.split(' ') if word != ''}
+    prompt -= bad_words
 
     def make_chain(nodes, initial_chain, starts):
         choices = starts
