@@ -9,6 +9,8 @@ import random
 window = 2
 
 uninteresting_words = set()
+bad_words = set()
+bad_training_phrases = set()
 message_sets = []
 file_names = []
 with open(sys.argv[1], 'r') as file_list_file:
@@ -17,7 +19,7 @@ with open(sys.argv[1], 'r') as file_list_file:
         mode = line[0]
         path = line[1]
         if mode == 'ignore': continue
-        if mode != 'uninteresting-words':
+        if mode not in ['uninteresting-words', 'bad-training-phrases', 'bad-words']:
             file_names += [path]
         messages = []
         with open(path.strip(), 'r') as text_file:
@@ -27,6 +29,10 @@ with open(sys.argv[1], 'r') as file_list_file:
                 messages += [message + '.' for message in ' '.join(text_file).split('.')]
             elif mode == 'uninteresting-words':
                 uninteresting_words |= set(map(lambda line: line.strip(), text_file))
+            elif mode == 'bad-words':
+                bad_words |= set(map(lambda line: line.strip(), text_file))
+            elif mode == 'bad-training-phrases':
+                bad_training_phrases |= set(map(lambda line: line.strip('\n'), text_file))
             else:
                 raise Exception(f"Invalid text file type \"{mode}\"")
         messages = [nltk.word_tokenize(line.strip()) for line in messages]
@@ -89,9 +95,13 @@ def train(message, nodes):
         tokens = rest(tokens)
 
 for message in messages:
-    starts += [first(message)]
-    train(message, nodes)
-    train(list(reversed(message)), inverse_nodes)
+    for bad_training_phrase in bad_training_phrases:
+        if bad_training_phrase in message:
+            break
+    else:
+        starts += [first(message)]
+        train(message, nodes)
+        train(list(reversed(message)), inverse_nodes)
 
 print(len(vocabulary))
 
@@ -134,19 +144,11 @@ def do_bot(text_in):
     prompt = ''.join(character for character in prompt if character.isalpha() or character == ' ')
     prompt = {word for word in prompt.split(' ') if word != ''}
 
-    seed_word_list = list(prompt & interesting_words)
-    if seed_word_list:
-        seed_word = random.choice(seed_word_list)
-        print(f'Chose "{seed_word}"')
-        matching_keys = list(filter(lambda key: seed_word in key.split(' '), nodes.keys()))
-    else:
-        matching_keys = []
-
     def make_chain(nodes, initial_chain, starts):
         choices = starts
         chain = initial_chain
         iterations = 0
-        max_iterations = random.randint(50, 100)
+        max_iterations = random.randint(500, 1000)
         while choices:
             if iterations >= max_iterations:
                 break
@@ -164,30 +166,63 @@ def do_bot(text_in):
             choices = nodes[key.lower()]
             iterations += 1
         return chain
-    if matching_keys:
-        seed_key = random.choice(matching_keys).split(' ')
-        if len(seed_key) == 1:
-            reverse_choices = [seed_key[0]]
-            reverse_chain = []
-            forward_choices = [seed_key[0]]
-            forward_chain = []
+
+    not_good = True
+    max_attempts = 10
+    attempts = 0
+    while not_good:
+        if attempts >= max_attempts:
+            tokens_out = []
+            break
+        attempts += 1
+
+        seed_word_list = list(prompt & interesting_words)
+        if seed_word_list:
+            seed_word = random.choice(seed_word_list)
+            print(f'Chose "{seed_word}"')
+            matching_keys = list(filter(lambda key: seed_word in key.split(' '), nodes.keys()))
         else:
-            reverse_choices = [seed_key[0]]
-            reverse_chain = [seed_key[1]]
-            forward_choices = [seed_key[1]]
-            forward_chain = [seed_key[0]]
-        # print(seed_key)
-        reversed_chain = list(reversed(make_chain(inverse_nodes, reverse_chain, reverse_choices)))
-        chain = make_chain(nodes, forward_chain, forward_choices)
-        # print(reversed_chain)
-        # print(chain)
-        tokens_out = reversed_chain + chain[2:]
-    else:
-        tokens_out = make_chain(nodes, [], starts)
-    text_out = TreebankWordDetokenizer().detokenize(tokens_out)
+            matching_keys = []
+
+        if matching_keys:
+            seed_key = random.choice(matching_keys).split(' ')
+            if len(seed_key) == 1:
+                reverse_choices = [seed_key[0]]
+                reverse_chain = []
+                forward_choices = [seed_key[0]]
+                forward_chain = []
+            else:
+                reverse_choices = [seed_key[0]]
+                reverse_chain = [seed_key[1]]
+                forward_choices = [seed_key[1]]
+                forward_chain = [seed_key[0]]
+            # print(seed_key)
+            reversed_chain = list(reversed(make_chain(inverse_nodes, reverse_chain, reverse_choices)))
+            chain = make_chain(nodes, forward_chain, forward_choices)
+            # print(reversed_chain)
+            # print(chain)
+            tokens_out = reversed_chain + chain[2:]
+        else:
+            tokens_out = make_chain(nodes, [], starts)
+        not_good = False
+        for token in tokens_out:
+            if token in bad_words:
+                not_good = True
+    text_out = (TreebankWordDetokenizer()
+                .detokenize(tokens_out)
+                .strip()
+                .replace('<@ 1364673080189915287>', '<@1364673080189915287>')
+                .replace('<@ 1231818732117164072>', '<@1231818732117164072>')
+                .replace('<@ 1364796115215712277>', '<@1364796115215712277>')
+                .replace('<@ 358375189458976771>', '<@358375189458976771>')
+                .replace('<@ 842099537841094677>', '<@842099537841094677>')
+                .replace('<@ 999175607181135872>', '<@999175607181135872>')
+                .replace(': mikudayo:', ':mikudayo:')
+                .replace('mikudayo', ':mikudayo:')
+                .replace('https: //', 'https://'))
     print(text_out)
     # print()
-    return text_out.replace('\\n', '\n').strip()
+    return text_out.replace('\\n', '\n')
 
 
 prompt = ' '.join(sys.argv[2:])
