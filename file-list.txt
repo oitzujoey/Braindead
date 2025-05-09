@@ -2,7 +2,7 @@ uninteresting-words /home/joey/Documents/projects/markov-chain/uninteresting_wor
 bad-training-phrases /home/joey/Documents/projects/markov-chain/bad_training_phrases.txt
 bad-words /home/joey/Documents/projects/markov-chain/bad_words.txt
 messages /home/joey/Documents/projects/discord/bot2/channels/the-miku-channel.txt
-messages /home/joey/Documents/projects/discord/bot2/channels/gremlint-lair.txt
+messages /home/joey/Documents/projects/discord/bot2/channels/bot-world.txt
 ignore /home/joey/Documents/books/335150171-The-Hows-and-Whys-of-Level-Design.txt
 ignore /home/joey/Documents/books/cgol-an-algebraic-notation-for-maclisp-users.txt
 ignore /mnt/c/Users/joey/Documents/bible/nasb_raw.txt
