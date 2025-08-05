@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 
 import sys
-import nltk
-from nltk.tokenize.treebank import TreebankWordDetokenizer
+# import nltk
+# from nltk.tokenize.treebank import TreebankWordDetokenizer
 import random
+import math
 
 
 window = 10
@@ -73,13 +74,21 @@ dictionaries = list(map(lambda _: {}, [None]*window))
 starts = []
 vocabulary = set()
 
+def sanitize(string, loose=True):
+    sanitized_string = ''.join(character for character in string if character.isalpha() and character.isascii())
+    if loose and not sanitized_string:
+        return string
+    return sanitized_string
+
 def train(message:str, dictionaries:list):
     for dictionary_index, dictionary in enumerate(dictionaries):
         for token_index, token in enumerate(message):
+            ## Sanitize key token.
+            token = sanitize(token)
             associated_token = elt(message, token_index + dictionary_index + 1)
             if token not in dictionary: dictionary[token] = {}
             if associated_token not in dictionary[token]: dictionary[token][associated_token] = 0.0
-            dictionary[token][associated_token] += 1.0 # * (len(dictionaries) - dictionary_index)/len(dictionaries)
+            dictionary[token][associated_token] += 1.0
                 
 
 for message in messages:
@@ -90,51 +99,57 @@ for message in messages:
         starts += [first(message)]
         vocabulary |= set(message)
         train(message, dictionaries)
-
-def groom_choices(choices):
-    new_choices = set()
-    for choice in choices:
-        new_choice = ''.join(character for character in choice if character.isalpha() and character.isascii())
-        new_choices |= {new_choice.lower()}
-    new_choices -= uninteresting_words
-    # print(new_choices)
-    return new_choices
-interesting_words = groom_choices(vocabulary)
+for dictionary_index, dictionary in enumerate(dictionaries):
+    for token_dict in dictionary.values():
+        for key in token_dict:
+            m = max(token_dict.items(), key=lambda item: item[1])[1]
+        for key in token_dict:
+            # pass
+            # token_dict[key] = math.log(token_dict[key]) + 1.0
+            token_dict[key] = token_dict[key]/m * math.pow(1.1, -dictionary_index)
+            # token_dict[key] = math.log(m - token_dict[key] + 1) + 1.0
 
 def do_bot(text_in):
     prompt = text_in.lower()
     # prompt = ''.join(character for character in prompt if character.isalpha() or character == ' ')
-    prompt = [word for word in prompt.split() if word != '']
+    prompt = [sanitize(word) for word in prompt.split() if word != '']
 
     def make_chain(dictionaries, initial_chain, starts):
         choices = starts
         chain = initial_chain[:]
         iterations = 0
         max_iterations = random.randint(500, 1000)
-        choice = random.choice(choices)
+        if not chain:
+            choice = random.choice(choices)
         while True:
             if iterations >= max_iterations: break
-            if choice is End: break
-            chain += [choice]
-            local_window = window
-            # if len(chain) < window - 1:
-            #     local_window = len(chain) + 1
-            key = choice
-
-            choices_dicts = map(lambda dictionary: dictionary[key], dictionaries)
+            # key = sanitize(choice)
+            choices_dicts = []
+            for dictionary_index, dictionary in enumerate(dictionaries):
+                index = len(chain) - window + dictionary_index
+                # print(dictionary_index - window, index)
+                if index >= 0:
+                    key = sanitize(chain[index])
+                    ## Ignore key if not seen before.
+                    if key in dictionary:
+                        choices_dicts += [dictionary[key]]
             choices_dict = {}
             for choices in choices_dicts:
                 for choice, count in choices.items():
-                    if choice not in choices_dict: choices_dict[choice] = 0
-                    choices_dict[choice] += count
+                    if choice not in choices_dict: choices_dict[choice] = 1.0
+                    choices_dict[choice] *= count
+            # if End in choices_dict:
+            #     choices_dict[End] /= 1.0
+            # print(choices_dict)
+            # print(choices_dict[End])
             words_list = list(choices_dict.keys())
             weights_list = list(choices_dict.values())
-            # for i in range(local_window - 1):
-            #     key = chain[-1-i] + key
-                # key = ' '.join(chain[-(window - 1):]) + ' ' + choice
-            # choices = nodes[key.lower()]
             if not words_list: break
+            choice = max(choices_dict.items(), key=lambda item: item[1])[0]
+            # print(choice)
             choice = random.choices(words_list, weights=weights_list)[0]
+            if choice is End: break
+            chain += [choice]
             iterations += 1
         return chain
 
@@ -146,7 +161,7 @@ def do_bot(text_in):
             tokens_out = []
             break
         attempts += 1
-        tokens_out = make_chain(dictionaries, prompt, starts)[len(prompt):]
+        tokens_out = make_chain(dictionaries, prompt, starts)
         not_good = False
         for token in tokens_out:
             if token in bad_words:
