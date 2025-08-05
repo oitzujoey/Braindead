@@ -1,5 +1,6 @@
 
 a
+about
 all
 an
 and
@@ -7,15 +8,19 @@ are
 as
 at
 be
+being
 bet
 but
 can
 center
 do
+dont
 em
 feeling
 for
+get
 go
+going
 good
 has
 held
@@ -23,8 +28,10 @@ hey
 how
 i
 if
+im
 in
 is
+know
 like
 lmao
 many
@@ -43,7 +50,9 @@ see
 so
 sometimes
 soon
+such
 that
+thats
 the
 then
 there
@@ -53,10 +62,13 @@ too
 u
 until
 ur
+use
 was
 way
 we
+well
 why
 wt
 you
+youll
 your

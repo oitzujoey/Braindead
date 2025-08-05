@@ -6,7 +6,7 @@ from nltk.tokenize.treebank import TreebankWordDetokenizer
 import random
 
 
-window = 2
+window = 3
 
 uninteresting_words = set()
 bad_words = set()
@@ -26,7 +26,7 @@ with open(sys.argv[1], 'r') as file_list_file:
             if mode == 'messages':
                 messages += list(text_file)
             elif mode == 'book':
-                messages += [message + '.' for message in ' '.join(text_file).split('.')]
+                messages += [message + '.' for message in ''.join(text_file).split('.')]
             elif mode == 'uninteresting-words':
                 uninteresting_words |= set(map(lambda line: line.strip(), text_file))
             elif mode == 'bad-words':
@@ -35,7 +35,7 @@ with open(sys.argv[1], 'r') as file_list_file:
                 bad_training_phrases |= set(map(lambda line: line.strip('\n'), text_file))
             else:
                 raise Exception(f"Invalid text file type \"{mode}\"")
-        messages = [nltk.word_tokenize(line.strip()) for line in messages]
+        messages = [list(line.strip()) for line in messages]
         if messages:
             message_sets += [messages]
 # message_set_lengths = []
@@ -86,8 +86,8 @@ def train(message, nodes):
         for i in range(window - 1):
             index = i + 1
             if index >= len(tokens): break
-            key += ' ' + tokens[index]
-        key = key.strip().lower()
+            key += tokens[index]
+        key = key.lower()
         value = elt(tokens, window)
         if key not in nodes:
             nodes[key] = []
@@ -96,7 +96,7 @@ def train(message, nodes):
 
 for message in messages:
     for bad_training_phrase in bad_training_phrases:
-        if bad_training_phrase in ' '.join(message):
+        if bad_training_phrase in ''.join(message):
             break
     else:
         starts += [first(message)]
@@ -142,7 +142,7 @@ interesting_words = groom_choices(vocabulary)
 def do_bot(text_in):
     prompt = text_in.lower()
     prompt = ''.join(character for character in prompt if character.isalpha() or character == ' ')
-    prompt = {word for word in prompt.split(' ') if word != ''}
+    prompt = {word for word in list(prompt) if word != ''}
     prompt -= bad_words
 
     def make_chain(nodes, initial_chain, starts):
@@ -161,7 +161,7 @@ def do_bot(text_in):
                 local_window = len(chain) + 1
             key = choice
             for i in range(local_window - 1):
-                key = chain[-1-i] + ' ' + key
+                key = chain[-1-i] + key
                 # key = ' '.join(chain[-(window - 1):]) + ' ' + choice
             chain += [choice]
             choices = nodes[key.lower()]
@@ -181,12 +181,12 @@ def do_bot(text_in):
         if seed_word_list:
             seed_word = random.choice(seed_word_list)
             print(f'Chose "{seed_word}"')
-            matching_keys = list(filter(lambda key: seed_word in key.split(' '), nodes.keys()))
+            matching_keys = list(filter(lambda key: seed_word in list(key), nodes.keys()))
         else:
             matching_keys = []
 
         if matching_keys:
-            seed_key = random.choice(matching_keys).split(' ')
+            seed_key = list(random.choice(matching_keys))
             if len(seed_key) == 1:
                 reverse_choices = [seed_key[0]]
                 reverse_chain = []
@@ -194,9 +194,9 @@ def do_bot(text_in):
                 forward_chain = []
             else:
                 reverse_choices = [seed_key[0]]
-                reverse_chain = [seed_key[1]]
-                forward_choices = [seed_key[1]]
-                forward_chain = [seed_key[0]]
+                reverse_chain = seed_key[1:]
+                forward_choices = [seed_key[-1]]
+                forward_chain = seed_key[:-2]
             # print(seed_key)
             reversed_chain = list(reversed(make_chain(inverse_nodes, reverse_chain, reverse_choices)))
             chain = make_chain(nodes, forward_chain, forward_choices)
@@ -209,8 +209,7 @@ def do_bot(text_in):
         for token in tokens_out:
             if token in bad_words:
                 not_good = True
-    text_out = (TreebankWordDetokenizer()
-                .detokenize(tokens_out)
+    text_out = (''.join(tokens_out)
                 .strip()
                 .replace('<@ 1364673080189915287>', '<@1364673080189915287>')
                 .replace('<@ 1231818732117164072>', '<@1231818732117164072>')
@@ -228,7 +227,7 @@ def do_bot(text_in):
 
 prompt = ' '.join(sys.argv[2:])
 
-print('READY')
+# print('READY')
 print(len(nodes))
 for i in range(100):
     do_bot(prompt)
